@@ -2,9 +2,11 @@ package sg.edu.rp.c347.p09gettingmylocations;
 
 import android.Manifest;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.location.Location;
 import android.os.Environment;
 import android.support.v4.app.ActivityCompat;
+import android.support.v4.app.FragmentManager;
 import android.support.v4.content.ContextCompat;
 import android.support.v4.content.PermissionChecker;
 import android.support.v7.app.AppCompatActivity;
@@ -20,6 +22,15 @@ import com.google.android.gms.location.LocationCallback;
 import com.google.android.gms.location.LocationRequest;
 import com.google.android.gms.location.LocationResult;
 import com.google.android.gms.location.LocationServices;
+import com.google.android.gms.maps.CameraUpdateFactory;
+import com.google.android.gms.maps.GoogleMap;
+import com.google.android.gms.maps.OnMapReadyCallback;
+import com.google.android.gms.maps.SupportMapFragment;
+import com.google.android.gms.maps.UiSettings;
+import com.google.android.gms.maps.model.BitmapDescriptorFactory;
+import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.Marker;
+import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.android.gms.tasks.Task;
 
@@ -36,6 +47,7 @@ public class MainActivity extends AppCompatActivity {
     FusedLocationProviderClient client;
     TextView tvLat, tvLng;
     String folderLocation;
+    private GoogleMap map;
 
 
     @Override
@@ -43,70 +55,110 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+
         btnStart = findViewById(R.id.buttonStart);
         btnStop = findViewById(R.id.buttonStop);
         btnCheck = findViewById(R.id.buttonCheck);
 
         tvLat = findViewById(R.id.textViewLat);
         tvLng = findViewById(R.id.textViewLng);
-
-
         client = LocationServices.getFusedLocationProviderClient(this);
 
         folderLocation = Environment.getExternalStorageDirectory().getAbsolutePath() + "/mySavedLocations";
 
 
-
-                if (checkPermission()) {
-
-                    //make folder
-                    File folder = new File(folderLocation);
-                    if (folder.exists() == false) {
-                        boolean result = folder.mkdir();
-                        if (result == true) {
-                            Log.d("File Read/Write", "Folder created");
-                        }
-                    }
+        FragmentManager fm = getSupportFragmentManager();
+        final SupportMapFragment mapFragment = (SupportMapFragment)
+                fm.findFragmentById(R.id.map);
 
 
+        if (checkPermission()) {
 
-                    //get last location
-                    Task<Location> task = client.getLastLocation();
 
-                    task.addOnSuccessListener(MainActivity.this, new OnSuccessListener<Location>() {
-                        @Override
-                        public void onSuccess(Location location) {
-                            // Got last known location. In some reare situations this can be null
-                            if (location != null) {
-
-                                tvLat.setText(String.valueOf(location.getLatitude()));
-                                tvLng.setText(String.valueOf(location.getLongitude()));
-
-                            } else {
-                                String msg = "No last known lcoation";
-                                Toast.makeText(MainActivity.this, msg, Toast.LENGTH_SHORT).show();
-                            }
-                        }
-                    });
-
-                } else {
-                    String msg = "Permission not granted to retrieve location info";
-                    Toast.makeText(MainActivity.this, msg, Toast.LENGTH_SHORT).show();
-                    ActivityCompat.requestPermissions(MainActivity.this,
-                            new String[]{Manifest.permission.ACCESS_FINE_LOCATION,
-                                    Manifest.permission.ACCESS_COARSE_LOCATION,
-                                    Manifest.permission.WRITE_EXTERNAL_STORAGE,
-                                    Manifest.permission.READ_EXTERNAL_STORAGE}, 0);
-
+            //make folder
+            File folder = new File(folderLocation);
+            if (folder.exists() == false) {
+                boolean result = folder.mkdir();
+                if (result == true) {
+                    Log.d("File Read/Write", "Folder created");
                 }
+            }
 
 
+            //get last location
+            Task<Location> task = client.getLastLocation();
+
+            task.addOnSuccessListener(MainActivity.this, new OnSuccessListener<Location>() {
+                @Override
+                public void onSuccess(Location location) {
+                    // Got last known location. In some reare situations this can be null
+                    if (location != null) {
+
+
+                        tvLat.setText(String.valueOf(location.getLatitude()));
+                        tvLng.setText(String.valueOf(location.getLongitude()));
+
+                        final double lat = location.getLatitude();
+                        final double lng = location.getLongitude();
+
+
+                        mapFragment.getMapAsync(new OnMapReadyCallback() {
+                            @Override
+                            public void onMapReady(GoogleMap googleMap) {
+                                map = googleMap;
+
+
+                                LatLng poi = new LatLng(lat, lng);
+                                map.moveCamera(CameraUpdateFactory.newLatLngZoom(poi,
+                                        10));
+
+
+                                final Marker cp = map.addMarker(new
+                                        MarkerOptions()
+                                        .position(poi)
+                                        .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED)));
+
+
+                                if (checkPermission()) {
+
+                                    UiSettings ui = map.getUiSettings();
+
+                                    ui.setCompassEnabled(true);
+                                    ui.setZoomControlsEnabled(true);
+                                    ui.setMapToolbarEnabled(true);
+                                } else {
+                                    Log.e("GMap - Permission", "GPS access has not been granted");
+                                    ActivityCompat.requestPermissions(MainActivity.this,
+                                            new String[]{Manifest.permission.ACCESS_FINE_LOCATION},
+                                            0);
+                                }
+                            }
+                        });
+
+                                
+                    } else {
+                        String msg = "No last known lcoation";
+                        Toast.makeText(MainActivity.this, msg, Toast.LENGTH_SHORT).show();
+                    }
+                }
+            });
+
+        } else {
+            String msg = "Permission not granted to retrieve location info";
+            Toast.makeText(MainActivity.this, msg, Toast.LENGTH_SHORT).show();
+            ActivityCompat.requestPermissions(MainActivity.this,
+                    new String[]{Manifest.permission.ACCESS_FINE_LOCATION,
+                            Manifest.permission.ACCESS_COARSE_LOCATION,
+                            Manifest.permission.WRITE_EXTERNAL_STORAGE,
+                            Manifest.permission.READ_EXTERNAL_STORAGE}, 0);
+
+        }
 
 
         btnStart.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                Intent i = new Intent(MainActivity.this,MyService.class);
+                Intent i = new Intent(MainActivity.this, MyService.class);
                 startService(i);
 
 
@@ -144,14 +196,12 @@ public class MainActivity extends AppCompatActivity {
                                     writer.flush();
                                     writer.close();
                                 } catch (Exception e) {
-                                    Toast.makeText(MainActivity.this, "Failed to write!",Toast.LENGTH_LONG).show();
+                                    Toast.makeText(MainActivity.this, "Failed to write!", Toast.LENGTH_LONG).show();
                                     e.printStackTrace();
                                 }
 
 
-
-
-                            }else {
+                            } else {
                                 String msg = "No last known lcoation";
                                 Toast.makeText(MainActivity.this, msg, Toast.LENGTH_SHORT).show();
                             }
@@ -160,11 +210,9 @@ public class MainActivity extends AppCompatActivity {
                     };
 
 
+                    client.requestLocationUpdates(mLocationRequest, mLocationCallback, null);
 
-                    client.requestLocationUpdates(mLocationRequest, mLocationCallback,null);
-
-                }
-                else {
+                } else {
                     String msg = "Permission not granted to retrieve location info";
                     Toast.makeText(MainActivity.this, msg, Toast.LENGTH_SHORT).show();
                     ActivityCompat.requestPermissions(MainActivity.this,
@@ -180,7 +228,7 @@ public class MainActivity extends AppCompatActivity {
         btnStop.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                Intent i = new Intent(MainActivity.this,MyService.class);
+                Intent i = new Intent(MainActivity.this, MyService.class);
                 stopService(i);
 
                 client.removeLocationUpdates(mLocationCallback);
@@ -201,7 +249,7 @@ public class MainActivity extends AppCompatActivity {
                         FileReader reader = new FileReader(targetFile);
                         BufferedReader br = new BufferedReader(reader);
                         String line = br.readLine();
-                        while (line!= null) {
+                        while (line != null) {
                             data += line + "\n";
                             line = br.readLine();
                         }
@@ -209,13 +257,13 @@ public class MainActivity extends AppCompatActivity {
                         reader.close();
 
                     } catch (Exception e) {
-                        Toast.makeText(MainActivity.this, "Failed to read!",Toast.LENGTH_SHORT).show();
+                        Toast.makeText(MainActivity.this, "Failed to read!", Toast.LENGTH_SHORT).show();
                         e.printStackTrace();
 
                     }
 
-                    Log.d("Content",data);
-                    Toast.makeText(MainActivity.this, data,Toast.LENGTH_LONG).show();
+                    Log.d("Content", data);
+                    Toast.makeText(MainActivity.this, data, Toast.LENGTH_LONG).show();
                 }
             }
         });
@@ -224,9 +272,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
 
-
-
-    private boolean checkPermission(){
+    private boolean checkPermission() {
         int permissionCheck_Coarse = ContextCompat.checkSelfPermission(
                 MainActivity.this, Manifest.permission.ACCESS_COARSE_LOCATION);
         int permissionCheck_Fine = ContextCompat.checkSelfPermission(
@@ -240,8 +286,8 @@ public class MainActivity extends AppCompatActivity {
 
         if (permissionCheck_Coarse == PermissionChecker.PERMISSION_GRANTED
                 || permissionCheck_Fine == PermissionChecker.PERMISSION_GRANTED
-        || permissionCheck_WRITEEXT== PermissionChecker.PERMISSION_GRANTED
-        || permissionCheck_READEXT == PermissionChecker.PERMISSION_GRANTED) {
+                || permissionCheck_WRITEEXT == PermissionChecker.PERMISSION_GRANTED
+                || permissionCheck_READEXT == PermissionChecker.PERMISSION_GRANTED) {
             return true;
         } else {
             return false;
